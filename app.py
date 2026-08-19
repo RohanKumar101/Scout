@@ -492,10 +492,10 @@ if results:
             st.markdown(normalize_content(results["writer"]))
             filename_topic = re.sub(r"[^a-z0-9]+", "_", st.session_state.last_topic.lower()).strip("_")[:45] or "research"
             st.download_button(
-                label="Download report (.md)",
+                label="Download report (.pdf)",
                 data=normalize_content(results["writer"]),
-                file_name=f"{filename_topic}_research_brief.md",
-                mime="text/markdown",
+                file_name=f"{filename_topic}_research_brief.pdf",
+                mime="application/pdf",
             )
 
     if "critic" in results:
