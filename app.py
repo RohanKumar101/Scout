@@ -6,6 +6,114 @@ import streamlit as st
 
 from src.agents.agents import build_reader_agent, build_search_agent, critic_chain, writer_chain
 
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_LEFT
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.units import mm
+from io import BytesIO
+
+
+def create_pdf(text: str) -> bytes:
+    buffer = BytesIO()
+
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=18 * mm,
+        leftMargin=18 * mm,
+        topMargin=18 * mm,
+        bottomMargin=18 * mm,
+    )
+
+    styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle(
+        "ReportTitle",
+        parent=styles["Title"],
+        fontSize=20,
+        leading=24,
+        spaceAfter=12,
+    )
+
+    heading_style = ParagraphStyle(
+        "Heading",
+        parent=styles["Heading2"],
+        fontSize=14,
+        leading=18,
+        spaceBefore=10,
+        spaceAfter=6,
+    )
+
+    body_style = ParagraphStyle(
+        "Body",
+        parent=styles["BodyText"],
+        fontSize=10,
+        leading=15,
+        spaceAfter=7,
+    )
+
+    story = []
+
+    for line in text.splitlines():
+        line = line.strip()
+
+        if not line:
+            story.append(Spacer(1, 5))
+            continue
+
+        # Markdown headings
+        if line.startswith("# "):
+            story.append(
+                Paragraph(
+                    line[2:].strip(),
+                    title_style
+                )
+            )
+
+        elif line.startswith("## "):
+            story.append(
+                Paragraph(
+                    line[3:].strip(),
+                    heading_style
+                )
+            )
+
+        elif line.startswith("### "):
+            story.append(
+                Paragraph(
+                    line[4:].strip(),
+                    heading_style
+                )
+            )
+
+        else:
+            # Basic Markdown cleanup
+            line = re.sub(r"\*\*(.*?)\*\*", r"<b>\1</b>", line)
+            line = re.sub(r"\*(.*?)\*", r"<i>\1</i>", line)
+
+            # Escape characters that ReportLab interprets as XML
+            line = line.replace("&", "&amp;")
+            line = line.replace("<b>", "___BOLD_OPEN___")
+            line = line.replace("</b>", "___BOLD_CLOSE___")
+            line = line.replace("<i>", "___ITALIC_OPEN___")
+            line = line.replace("</i>", "___ITALIC_CLOSE___")
+            line = line.replace("<", "&lt;")
+            line = line.replace(">", "&gt;")
+
+            line = line.replace("___BOLD_OPEN___", "<b>")
+            line = line.replace("___BOLD_CLOSE___", "</b>")
+            line = line.replace("___ITALIC_OPEN___", "<i>")
+            line = line.replace("___ITALIC_CLOSE___", "</i>")
+
+            story.append(
+                Paragraph(line, body_style)
+            )
+
+    doc.build(story)
+
+    return buffer.getvalue()
+
 
 st.set_page_config(
     page_title="Scout — AI Research Agent",
@@ -487,16 +595,33 @@ if results:
             st.button("New research", on_click=reset_all, use_container_width=True)
 
     if "writer" in results:
-        with st.container(key="report_card"):
-            st.markdown('<div class="result-kicker">✦ Synthesis complete</div>', unsafe_allow_html=True)
-            st.markdown(normalize_content(results["writer"]))
-            filename_topic = re.sub(r"[^a-z0-9]+", "_", st.session_state.last_topic.lower()).strip("_")[:45] or "research"
-            st.download_button(
-                label="Download report (.pdf)",
-                data=normalize_content(results["writer"]),
-                file_name=f"{filename_topic}_research_brief.pdf",
-                mime="application/pdf",
-            )
+     with st.container(key="report_card"):
+        st.markdown(
+            '<div class="result-kicker">✦ Synthesis complete</div>',
+            unsafe_allow_html=True
+        )
+
+        report_text = normalize_content(results["writer"])
+
+        st.markdown(report_text)
+
+        filename_topic = (
+            re.sub(
+                r"[^a-z0-9]+",
+                "_",
+                st.session_state.last_topic.lower()
+            ).strip("_")[:45]
+            or "research"
+        )
+
+        pdf_data = create_pdf(report_text)
+
+        st.download_button(
+            label="Download report (.pdf)",
+            data=pdf_data,
+            file_name=f"{filename_topic}_research_brief.pdf",
+            mime="application/pdf",
+        )
 
     if "critic" in results:
         with st.container(key="review_card"):
